@@ -1,0 +1,294 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Panel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background:linear-gradient(135deg, #0d1b2a, #1b263b, #415a77);
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #1b263b;
+      color: white;
+      padding: 15px;
+      text-align: center;
+    }
+    .container {
+      padding: 20px;
+      max-width: 900px;
+      margin: auto;
+    }
+    h2 { color: #fff; margin-top: 30px; }
+    form, .card {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    input, select, textarea {
+      width: 95%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      background: #2196f3;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover { background: #1976d2; }
+    .btn-danger { background: #e53935; }
+    .btn-danger:hover { background: #b71c1c; }
+    .hidden { display: none; }
+    .list-item {
+      background: #f1f1f1;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 5px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎓 Student Panel</h1>
+    <button onclick="logout()">Logout</button>
+  </header>
+
+  <div class="container">
+
+    <!-- Register -->
+    <section id="registerSection">
+      <h2>Register</h2>
+      <form id="studentRegisterForm">
+        <input type="text" id="studentName" placeholder="Full Name" required>
+        <input type="email" id="studentEmail" placeholder="Email" required>
+        <input type="password" id="studentPassword" placeholder="Password" required>
+        <input type="text" id="studentDepartment" placeholder="Department" required>
+        <button type="submit">Register</button>
+      </form>
+    </section>
+
+    <!-- Login -->
+    <section id="loginSection">
+      <h2>Login</h2>
+      <form id="studentLoginForm">
+        <input type="email" id="loginEmail" placeholder="Email" required>
+        <input type="password" id="loginPassword" placeholder="Password" required>
+        <button type="submit">Login</button>
+      </form>
+    </section>
+
+    <!-- Dashboard -->
+    <section id="dashboard" class="hidden">
+      <!-- Search Teacher -->
+      <div class="card">
+        <h2>Search Teacher</h2>
+        <input type="text" id="searchDept" placeholder="Enter Department">
+        <button onclick="searchTeachers()">Search</button>
+        <div id="teacherResults"></div>
+      </div>
+
+      <!-- Book Appointment -->
+      <div class="card">
+        <h2>Book Appointment</h2>
+        <form id="bookForm">
+          <select id="teacherSelect" required></select>
+          <input type="text" id="appointmentTitle" placeholder="Title" required>
+          <input type="datetime-local" id="appointmentTime" required>
+          <button type="submit">Book</button>
+        </form>
+      </div>
+
+      <!-- Send Message -->
+      <div class="card">
+        <h2>Send Message</h2>
+        <form id="messageForm">
+          <select id="messageTeacher" required></select>
+          <textarea id="messageText" placeholder="Type your message..." required></textarea>
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </section>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { getFirestore, setDoc, doc, collection, getDocs, addDoc, query, where } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+     apiKey: "AIzaSyCFDcIWlB0gaGAt3BNlEGtRH28PjuYAwuY",
+     authDomain: "student-teacher-appointm-b542e.firebaseapp.com",
+     projectId: "student-teacher-appointm-b542e",
+     storageBucket: "student-teacher-appointm-b542e.firebasestorage.app",
+     messagingSenderId: "132556851380",
+     appId: "1:132556851380:web:bb4a452a227ef2141cafe1",
+     measurementId: "G-H5WE772TBD"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    let currentStudent = null;
+
+    // Register Student
+    document.getElementById("studentRegisterForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("studentName").value;
+      const email = document.getElementById("studentEmail").value;
+      const password = document.getElementById("studentPassword").value;
+      const department = document.getElementById("studentDepartment").value;
+
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        await setDoc(doc(db, "students", user.uid), {
+          name, email, department, approved: false
+        });
+
+        alert("✅ Registered successfully! Wait for admin approval.");
+        document.getElementById("studentRegisterForm").reset();
+      } catch (err) {
+        alert("❌ " + err.message);
+      }
+    });
+
+    // Login Student
+    document.getElementById("studentLoginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const email = document.getElementById("loginEmail").value;
+      const password = document.getElementById("loginPassword").value;
+
+      try {
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        currentStudent = userCredential.user;
+
+        // Check approval
+        const q = query(collection(db, "students"), where("email", "==", email));
+        const querySnapshot = await getDocs(q);
+        let approved = false;
+        querySnapshot.forEach((docSnap) => {
+          if (docSnap.data().approved) approved = true;
+        });
+
+        if (!approved) {
+          alert("⚠️ Admin has not approved your account yet.");
+          await signOut(auth);
+          return;
+        }
+
+        document.getElementById("loginSection").classList.add("hidden");
+        document.getElementById("registerSection").classList.add("hidden");
+        document.getElementById("dashboard").classList.remove("hidden");
+
+        loadTeachersForSelect();
+      } catch (err) {
+        alert("❌ " + err.message);
+      }
+    });
+
+    // Search Teachers by Department
+    window.searchTeachers = async function() {
+      const dept = document.getElementById("searchDept").value.trim();
+      const teacherResults = document.getElementById("teacherResults");
+      teacherResults.innerHTML = "";
+
+      let q = collection(db, "teachers");
+      if (dept) {
+        q = query(collection(db, "teachers"), where("department", "==", dept));
+      }
+
+      const querySnapshot = await getDocs(q);
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const div = document.createElement("div");
+        div.className = "list-item";
+        div.innerHTML = `${data.name} - ${data.department} (${data.subject})`;
+        teacherResults.appendChild(div);
+      });
+    }
+
+    // Load Teachers for Dropdowns
+    async function loadTeachersForSelect() {
+      const querySnapshot = await getDocs(collection(db, "teachers"));
+      const teacherSelect = document.getElementById("teacherSelect");
+      const messageTeacher = document.getElementById("messageTeacher");
+      teacherSelect.innerHTML = "";
+      messageTeacher.innerHTML = "";
+
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const option = document.createElement("option");
+        option.value = docSnap.id;
+        option.textContent = `${data.name} - ${data.department}`;
+        teacherSelect.appendChild(option);
+
+        const msgOption = option.cloneNode(true);
+        messageTeacher.appendChild(msgOption);
+      });
+    }
+
+    // Book Appointment
+    document.getElementById("bookForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const teacherId = document.getElementById("teacherSelect").value;
+      const title = document.getElementById("appointmentTitle").value;
+      const time = document.getElementById("appointmentTime").value;
+
+      try {
+        await addDoc(collection(db, "appointments"), {
+          studentId: currentStudent.uid,
+          teacherId,
+          title,
+          time,
+          status: "pending"
+        });
+        alert("✅ Appointment booked! Wait for teacher approval.");
+        document.getElementById("bookForm").reset();
+      } catch (err) {
+        alert("❌ " + err.message);
+      }
+    });
+
+    // Send Message
+    document.getElementById("messageForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const teacherId = document.getElementById("messageTeacher").value;
+      const text = document.getElementById("messageText").value;
+
+      try {
+        await addDoc(collection(db, "messages"), {
+          studentId: currentStudent.uid,
+          teacherId,
+          studentName: currentStudent.email,
+          text,
+          createdAt: new Date()
+        });
+        alert("✅ Message sent!");
+        document.getElementById("messageForm").reset();
+      } catch (err) {
+        alert("❌ " + err.message);
+      }
+    });
+
+    // Logout
+    window.logout = async function() {
+      await signOut(auth);
+      window.location.href = "index.html";
+    }
+  </script>
+</body>
+</html>

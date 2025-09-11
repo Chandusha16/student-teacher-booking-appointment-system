@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin Panel</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background:linear-gradient(135deg, #0d1b2a, #1b263b, #415a77);
+      margin: 0;
+      padding: 0;
+    }
+    header {
+      background: #1b263b;
+      color: white;
+      padding: 15px;
+      text-align: center;
+    }
+    .container {
+      padding: 20px;
+      max-width: 900px;
+      margin: auto;
+    }
+    h2 {
+      color: #fff;
+      margin-top: 30px;
+    }
+    form, .card {
+      background: white;
+      padding: 20px;
+      margin: 20px 0;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    }
+    input, select {
+      width: 95%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+    }
+    button {
+      background: #3f51b5;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    button:hover {
+      background: #283593;
+    }
+    .btn-danger { background: #e53935; }
+    .btn-danger:hover { background: #b71c1c; }
+    .list {
+      margin-top: 10px;
+    }
+    .list-item {
+      background: #f1f1f1;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 5px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .actions {
+      display: flex;
+      gap: 10px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>👨‍💼 Admin Panel</h1>
+    <button onclick="logout()">Logout</button>
+  </header>
+
+  <div class="container">
+    <!-- Add Teacher -->
+    <section>
+      <h2>Add Teacher</h2>
+      <form id="addTeacherForm">
+        <input type="text" id="teacherName" placeholder="Name" required>
+        <input type="text" id="teacherDepartment" placeholder="Department" required>
+        <input type="text" id="teacherSubject" placeholder="Subject" required>
+        <input type="email" id="teacherEmail" placeholder="Email" required>
+        <input type="password" id="teacherPassword" placeholder="Password" required>
+        <button type="submit">Add Teacher</button>
+      </form>
+    </section>
+
+    <!-- Teacher List (Update/Delete) -->
+    <section>
+      <h2>All Teachers</h2>
+      <div id="teacherList" class="list"></div>
+    </section>
+
+    <!-- Edit Teacher Form -->
+    <section id="editTeacherSection" style="display:none;">
+      <h2>Edit Teacher</h2>
+      <form id="editTeacherForm">
+        <input type="hidden" id="editTeacherId">
+        <input type="text" id="editTeacherName" placeholder="Name" required>
+        <input type="text" id="editTeacherDepartment" placeholder="Department" required>
+        <input type="text" id="editTeacherSubject" placeholder="Subject" required>
+        <button type="submit">Update Teacher</button>
+        <button type="button" onclick="cancelEdit()">Cancel</button>
+      </form>
+    </section>
+
+    <!-- Approve Students -->
+    <section>
+      <h2>Approve Student Registrations</h2>
+      <div id="studentList" class="list"></div>
+    </section>
+  </div>
+
+  <!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { 
+      getAuth, createUserWithEmailAndPassword, signOut 
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+    import { 
+      getFirestore, collection, addDoc, getDocs, deleteDoc, doc, updateDoc, setDoc 
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+    //  Replace with your Firebase config
+    const firebaseConfig = {
+     apiKey: "AIzaSyCFDcIWlB0gaGAt3BNlEGtRH28PjuYAwuY",
+     authDomain: "student-teacher-appointm-b542e.firebaseapp.com",
+     projectId: "student-teacher-appointm-b542e",
+     storageBucket: "student-teacher-appointm-b542e.firebasestorage.app",
+     messagingSenderId: "132556851380",
+     appId: "1:132556851380:web:bb4a452a227ef2141cafe1",
+     measurementId: "G-H5WE772TBD"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // ✅ Add Teacher
+    document.getElementById("addTeacherForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const name = document.getElementById("teacherName").value;
+      const department = document.getElementById("teacherDepartment").value;
+      const subject = document.getElementById("teacherSubject").value;
+      const email = document.getElementById("teacherEmail").value;
+      const password = document.getElementById("teacherPassword").value;
+
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
+
+        await setDoc(doc(db, "teachers", user.uid), {
+          name, department, subject, email
+        });
+
+        alert("✅ Teacher added successfully!");
+        document.getElementById("addTeacherForm").reset();
+        loadTeachers();
+      } catch (err) {
+        alert("❌ " + err.message);
+      }
+    });
+
+    // ✅ Load Teachers
+    async function loadTeachers() {
+      const teacherList = document.getElementById("teacherList");
+      teacherList.innerHTML = "";
+      const querySnapshot = await getDocs(collection(db, "teachers"));
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const div = document.createElement("div");
+        div.className = "list-item";
+        div.innerHTML = `
+          ${data.name} - ${data.department} - ${data.subject}
+          <div class="actions">
+            <button onclick="editTeacher('${docSnap.id}', '${data.name}', '${data.department}', '${data.subject}')">Edit</button>
+            <button class="btn-danger" onclick="deleteTeacher('${docSnap.id}')">Delete</button>
+          </div>
+        `;
+        teacherList.appendChild(div);
+      });
+    }
+
+    // ✅ Delete Teacher
+    window.deleteTeacher = async function(id) {
+      await deleteDoc(doc(db, "teachers", id));
+      alert("🗑️ Teacher deleted!");
+      loadTeachers();
+    }
+
+    // ✅ Edit Teacher - Fill Form
+    window.editTeacher = function(id, name, department, subject) {
+      document.getElementById("editTeacherSection").style.display = "block";
+      document.getElementById("editTeacherId").value = id;
+      document.getElementById("editTeacherName").value = name;
+      document.getElementById("editTeacherDepartment").value = department;
+      document.getElementById("editTeacherSubject").value = subject;
+    };
+
+    // ✅ Cancel Edit
+    window.cancelEdit = function() {
+      document.getElementById("editTeacherSection").style.display = "none";
+    };
+
+    // ✅ Save Updated Teacher
+    document.getElementById("editTeacherForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const id = document.getElementById("editTeacherId").value;
+      const name = document.getElementById("editTeacherName").value;
+      const department = document.getElementById("editTeacherDepartment").value;
+      const subject = document.getElementById("editTeacherSubject").value;
+
+      try {
+        await updateDoc(doc(db, "teachers", id), {
+          name, department, subject
+        });
+        alert("✅ Teacher updated successfully!");
+        document.getElementById("editTeacherSection").style.display = "none";
+        loadTeachers();
+      } catch (err) {
+        alert("❌ " + err.message);
+      }
+    });
+
+    // ✅ Load Students for Approval
+    async function loadStudents() {
+      const studentList = document.getElementById("studentList");
+      studentList.innerHTML = "";
+      const querySnapshot = await getDocs(collection(db, "students"));
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (!data.approved) {
+          const div = document.createElement("div");
+          div.className = "list-item";
+          div.innerHTML = `
+            ${data.name} - ${data.department} (${data.email})
+            <button onclick="approveStudent('${docSnap.id}')">Approve</button>
+          `;
+          studentList.appendChild(div);
+        }
+      });
+    }
+
+    // ✅ Approve Student
+    window.approveStudent = async function(id) {
+      await updateDoc(doc(db, "students", id), { approved: true });
+      alert("✅ Student approved!");
+      loadStudents();
+    }
+
+    // ✅ Logout
+    window.logout = async function() {
+      await signOut(auth);
+      window.location.href = "index.html";
+    }
+
+    // Initial Load
+    loadTeachers();
+    loadStudents();
+  </script>
+</body>
+</html>
+
